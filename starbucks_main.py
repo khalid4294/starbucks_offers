@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[143]:
 
 
 # read necessary libraries
@@ -15,10 +15,13 @@ import matplotlib.pyplot as plt
 
 from sklearn.svm import SVC
 from sklearn.svm import LinearSVC
+from sklearn.metrics import f1_score
+from sklearn.model_selection import KFold
 from sklearn.naive_bayes import GaussianNB
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import AdaBoostClassifier
 from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import StratifiedKFold
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 
@@ -979,29 +982,16 @@ offer_user.head()
 # 
 # 
 # I wrote two functions to help me test out multiple variation and to tune in my model.
-# I tested multiple ML algorithims and got varied accuracy scores for each one, without using GridSearchCV, I got the following accuracy scores for these ML models.
-# 
-# GaussianNB = **0.45**
-# 
-# LogisticRegression = **0.45**
-# 
-# SVC = **0.45**
-# 
-# DecisionTreeClassifier = **0.44**
-# 
-# KNeighborsClassifier = **0.38**
-# 
-# AdaBoostClassifier = **0.48**
 # 
 # Then I tried adding more and more features: channel breakdown with binary values, filling NaN income values with avg column values, adding normalized income column, creating two different datasets, one with unique users and their preferred offer, and another dataset with each offer-user possible combanations and wether the user preferes this type of offer or not.
 # 
+# Then I tried predicting whether the user viewed and completed teh offer or not and I got a significat improvement in the accuracy scores.
 # 
-# I did not see any significant improvement in teh accuracy, or F1 scores.
-# Then I implemented GridSearchCV with multiple n_estimators and multiple learning_rates
+# Finally, I iterated through a couple of parameters with GridSearchCV, and the scores improved a bit but since it take way too much time, I commented GridSearchCV out
 
-# #### Store 4 different ML models to find teh best fit
+# #### Store 4 different ML models to find the best fit
 
-# In[37]:
+# In[98]:
 
 
 model_SVC = SVC()
@@ -1021,7 +1011,7 @@ parameters = {'n_estimators': [100, 500, 1000, 1500],
 
 # #### Creating functions to train and evaluate our models
 
-# In[55]:
+# In[108]:
 
 
 def train_model(df, features, labels, model):
@@ -1076,7 +1066,7 @@ def evaluate_model(model, X_test, y_test):
 
 # #### first, let's train and evaluate our model  on the user offer dataset
 
-# In[74]:
+# In[109]:
 
 
 #user_offer: age, gender, income, join dates as features
@@ -1086,7 +1076,7 @@ evaluate_model(model, X_test, y_test)
 
 # #### Now, let's train and evaluate our model  on the offer user dataset with just age, gender and income as features.
 
-# In[75]:
+# In[110]:
 
 
 #offer_user
@@ -1099,7 +1089,7 @@ evaluate_model(model, X_test, y_test)
 # 
 # ['age', 'gender', 'income_normalized','email', 'web', 'social', 'mobile', 'join_year', 'join_month', 'join_day', 'difficulty', 'duration']
 
-# In[76]:
+# In[120]:
 
 
 #offer_user with more features 
@@ -1107,7 +1097,7 @@ model, X_test, y_test = train_model(offer_user, ['age', 'gender', 'income_normal
 evaluate_model(model, X_test, y_test)
 
 
-# In[77]:
+# In[131]:
 
 
 #offer_user with compleeted offer as labels 
@@ -1115,13 +1105,9 @@ model, X_test, y_test = train_model(offer_user, ['age', 'gender', 'income_normal
 evaluate_model(model, X_test, y_test)
 
 
-# In[1295]:
+# # K Fold Cross Validation
 
-
-### further notes and improvments
-
-
-# In[ ]:
+# In[240]:
 
 
 
@@ -1139,26 +1125,69 @@ evaluate_model(model, X_test, y_test)
 
 
 
-# In[ ]:
+# In[265]:
+
+
+def perform_kfold(X, y, model, n_splits=5):
+    
+    '''
+    INPUT: featrues and labels for training and testing. An ML model. number of folds to perform K Fold Cross Validation 
+    
+    OUTPUT: a list of f1 scores for the set number of n_splits
+    '''
+    
+    k_scores = []
+    
+    df = [[X, y]]
+    
+    kf = KFold(n_splits=n_splits)
+    
+    for train_index, test_index in kf.split(X):
+        X_train, X_test, y_train, y_test = X.loc[train_index], X.loc[test_index], y[train_index], y[test_index]
+        
+        model = model.fit(X_train, y_train)
+        
+        y_pred = model.predict(X_test)
+        
+        
+        score = f1_score(y_test, y_pred)
+        
+        k_scores.append(score)
+    
+    return(k_scores)
+
+
+# In[270]:
 
 
 
 
 
-# In[ ]:
+# In[274]:
+
+
+X_fold = offer_user[['age', 'gender', 'income_normalized','email', 'web', 'social', 'mobile', 'join_year', 'join_month', 'join_day', 'difficulty', 'duration']]
+X_fold = X_fold.reset_index().drop(columns='index')
+
+y_fold = np.array(offer_user['offer_completed'])
 
 
 
+k_scores = perform_kfold(X_fold, y_fold, model_ABC, n_splits=5)
+print(f"F1 scores for {len(k_scores)} Fold Cross Validation: ", k_scores)
+print()
+print("average F1 Score:",np.mean(k_scores))
 
 
-# In[ ]:
+# # Further Improvements
 
-
-
-
-
-# In[ ]:
-
-
-
-
+# With the available data, We were able to analyze and classify our users, and which offer type affected each user group. 
+# There's a lot of things that could be improved and get either better accuracy or to have deeper understanding of the data, I'll list what I have in mind below:
+# 
+# - Some offers were sent multiple time, it would be better if we can add more weight to those offers when creating our label
+# 
+# 
+# - I think if we create monthly or quarterly user cohorts instead of annual, we'd have an extra feature that could further improve our classification
+# 
+# 
+# - Some offers were completed before they were viewed, I think we can have even better accuracy if we accounted for this edge case
